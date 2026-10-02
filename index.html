@@ -1,0 +1,262 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0}</style></head><body>
+<title>FM Performance Cockpit</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: control-room console. Sticky filter bar, tab strip, dense tables; every number opens its work orders. */
+:root{--bg:#eef1f0;--surface:#ffffff;--sunk:#e4e9e8;--ink:#14252b;--mute:#55696f;--line:#d3dbd9;--accent:#0a6a70;--accent-soft:#dcecec;--on-accent:#ffffff;
+--good:#1a7446;--good-bg:#dff1e6;--warn:#8f5a00;--warn-bg:#f8ebcc;--crit:#ab2f1d;--crit-bg:#f9e0db;
+--sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;--mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1618;--surface:#162124;--sunk:#1d2b2e;--ink:#e2ebeb;--mute:#92a5a9;--line:#2a3b3f;--accent:#5fc6c6;--accent-soft:#173739;--on-accent:#06201f;
+--good:#62d096;--good-bg:#143524;--warn:#e6b455;--warn-bg:#3a2c0d;--crit:#f2897a;--crit-bg:#43201a;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0e1618;--surface:#162124;--sunk:#1d2b2e;--ink:#e2ebeb;--mute:#92a5a9;--line:#2a3b3f;--accent:#5fc6c6;--accent-soft:#173739;--on-accent:#06201f;
+--good:#62d096;--good-bg:#143524;--warn:#e6b455;--warn-bg:#3a2c0d;--crit:#f2897a;--crit-bg:#43201a;color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.45;padding-inline:16px;padding-block:0 40px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+.top{display:flex;flex-wrap:wrap;gap:8px 20px;align-items:flex-end;justify-content:space-between;padding-top:18px}
+h1{font-size:22px;margin:0;font-weight:700;letter-spacing:-.2px}
+.by{color:var(--mute);font-size:12.5px}
+.demo{background:var(--warn-bg);color:var(--warn);border-radius:4px;padding:6px 10px;font-size:12.5px}
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:8px;display:flex;flex-direction:column;gap:8px;border-bottom:1px solid var(--line)}
+.filters{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
+.filters label{font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--mute);display:flex;flex-direction:column;gap:2px}
+select,button{font:inherit;color:var(--ink)}
+select{background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:5px 8px;font-size:13px;max-width:100%}
+.chk{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--good);background:var(--good-bg);padding:4px 8px;border-radius:4px}
+.tabs{display:flex;gap:2px;overflow-x:auto}
+.tabs button{background:none;border:0;border-bottom:3px solid transparent;padding:7px 11px;cursor:pointer;color:var(--mute);font-weight:500;white-space:nowrap}
+.tabs button[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+button:focus-visible,select:focus-visible,[data-d]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+main{display:flex;flex-direction:column;gap:16px}
+h2{font-size:12px;text-transform:uppercase;letter-spacing:1.1px;color:var(--mute);margin:0 0 8px;font-weight:600}
+.lede{color:var(--mute);margin:0;max-width:75ch}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:10px 12px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:2px}
+.tile:hover{border-color:var(--accent)}
+.tile .l{font-size:11.5px;color:var(--mute)}
+.tile .v{font-family:var(--mono);font-size:25px;font-weight:500;letter-spacing:-.5px}
+.tile .s{font-size:12px;color:var(--mute)}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,430px),1fr));gap:16px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px 14px;min-width:0}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--mute);font-weight:600;padding:5px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
+.n{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+th.n{text-align:right}
+[data-d]{cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
+.tile[data-d]{text-decoration:none}
+.pill{display:inline-block;font-family:var(--mono);font-size:12px;padding:1px 7px;border-radius:10px}
+.good{background:var(--good-bg);color:var(--good)}.warn{background:var(--warn-bg);color:var(--warn)}.crit{background:var(--crit-bg);color:var(--crit)}
+.up{color:var(--good)}.dn{color:var(--crit)}
+.hb{display:grid;grid-template-columns:minmax(110px,170px) 1fr 52px;gap:8px;align-items:center;font-size:13px;padding:3px 0}
+.hb .t{height:12px;background:var(--sunk);border-radius:2px;overflow:hidden}
+.hb .f{height:100%;background:var(--accent)}
+.flow{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch}
+.flow div{background:var(--sunk);border-radius:5px;padding:8px 12px;flex:1 1 110px}
+.flow b{display:block;font-family:var(--mono);font-size:20px;font-weight:500}
+.flow span{font-size:12px;color:var(--mute)}
+.note{font-size:12.5px;color:var(--mute);margin:8px 0 0}
+.act{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
+.act li{border-left:3px solid var(--accent);padding-left:10px}
+.act small{color:var(--mute);display:block}
+.rep{max-width:75ch;display:flex;flex-direction:column;gap:10px}
+.rep p{margin:0}
+.btn{background:var(--accent);color:var(--on-accent);border:0;border-radius:4px;padding:6px 12px;cursor:pointer;font-weight:600;font-size:13px}
+dialog{background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:0;width:min(1100px,calc(100vw - 24px));max-height:86vh}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+.dh{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--surface)}
+.dh h3{margin:0;font-size:15px}
+.db{padding:8px 14px 14px;overflow:auto}
+.db td,.db th{font-size:12px;white-space:nowrap}
+textarea{width:100%;height:120px;font-family:var(--mono);font-size:11px;background:var(--sunk);color:var(--ink);border:1px solid var(--line)}
+svg text{font-family:var(--mono);font-size:11px;fill:var(--mute)}
+</style>
+
+<div class="wrap">
+<div class="top">
+  <div><h1>FM Performance Cockpit</h1><div class="by">Prototype by Swarup Kumar Mohanty · performance, data and reporting for a 24/7 facilities estate</div></div>
+  <div class="demo">Invented data for a fictional estate and fictional contractors. No client or employer data.</div>
+</div>
+<div class="bar">
+  <div class="filters">
+    <label for="fm">Period<select id="fm"></select></label>
+    <label for="fc">Service provider<select id="fc"></select></label>
+    <label for="fz">Zone<select id="fz"></select></label>
+    <span class="chk" id="chk"></span>
+  </div>
+  <div class="tabs" role="tablist" id="tabs"></div>
+</div>
+<main id="main"></main>
+</div>
+<dialog id="dlg"><div class="dh"><h3 id="dt"></h3><div><button class="btn" id="cp">Copy as CSV</button> <button id="cl" class="btn" style="background:var(--sunk);color:var(--ink)">Close</button></div></div><div class="db" id="dbody"></div></dialog>
+
+<script>
+/* ---------- 1. Synthetic CAFM extract (seeded, so every load gives the same numbers) ---------- */
+let seed=20261002;const R=()=>{seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
+const rn=()=>{let u=0;for(let i=0;i<6;i++)u+=R();return(u-3)/.707};
+const pw=(arr,w)=>{let s=0;w.forEach(x=>s+=x);let r=R()*s;for(let i=0;i<arr.length;i++){r-=w[i];if(r<=0)return arr[i]}return arr[arr.length-1]};
+const ML=[30,31,30,31,31,30],MN=['Apr 2026','May 2026','Jun 2026','Jul 2026','Aug 2026','Sep 2026'],MS=[0];ML.forEach((d,i)=>MS.push(MS[i]+d*24));const NOW=MS[6];
+const mOf=h=>{for(let i=5;i>=0;i--)if(h>=MS[i])return i;return 0};
+const ft=h=>{if(h==null)return'';const m=mOf(h),r=h-MS[m],p=x=>String(Math.floor(x)).padStart(2,'0');return p(r/24+1)+' '+MN[m].slice(0,3)+' '+p(r%24)+':'+p(r%1*60)};
+const SLA={1:{resp:.25,rect:4,t:98},2:{resp:.5,rect:8,t:95},3:{resp:4,rect:24,t:90},4:{resp:24,rect:120,t:90}};
+const ZONES=['A · Main concourse','B · Plant & utilities','C · Landside & roads','D · Support buildings'];
+const CON=[{n:'Northline MEP',mu:[-1.05,-1,-.92,-.78,-.68,-.64],claim:.32,ppm:[.95,.95,.93,.88,.84,.83]},{n:'Kestrel Power & Water',mu:-1.05,claim:.08,ppm:.95},{n:'Verta Lifts & Fire',mu:-1.3,claim:.04,ppm:.98},{n:'Halden Fabric',mu:[-.5,-.55,-.68,-.82,-.95,-1.05],claim:.15,ppm:.9},{n:'Bright Soft Services',mu:-.98,claim:.1,ppm:.94}];
+const SYS=[{n:'HVAC',c:0,w:[20,24,31,36,36,31],k:28,p:['AHU','CH','FCU'],f:['No cooling','Water leak','Noise or vibration','Tripped','Sensor fault']},
+{n:'BMS & controls',c:0,w:6,k:6,p:['BMS'],f:['Controller offline','Sensor fault','Comms loss']},
+{n:'Electrical',c:1,w:16,k:18,p:['DB','UPS','LTG'],f:['Lighting out','Breaker tripped','Power loss','Socket fault']},
+{n:'Plumbing & drainage',c:1,w:14,k:14,p:['PMP','WC','DRN'],f:['Blockage','Water leak','No water','Pump fault']},
+{n:'Fire & life safety',c:2,w:8,k:12,p:['FAP','SPR'],f:['Panel fault','Detector fault','Valve leak']},
+{n:'Vertical transport',c:2,w:9,k:14,p:['LIFT','ESC'],f:['Out of service','Door fault','Entrapment','Noise or vibration']},
+{n:'Building fabric',c:3,w:13,k:12,p:['DOOR','ROOF','FLR'],f:['Door not closing','Ceiling damage','Floor damage','Glazing damage']},
+{n:'Cleaning & waste',c:4,w:14,k:8,p:['AREA'],f:['Spillage','Washroom service','Waste overflow']}];
+const A=[];SYS.forEach((s,si)=>{for(let i=0;i<s.k*6;i++){const z=Math.floor(R()*4);A.push({id:s.p[i%s.p.length]+'-'+'ABCD'[z]+'-'+String(A.length+1).padStart(4,'0'),s:si,z,crit:pw(['A','B','C'],[30,45,25]),w:R()<.03?6:1})}});
+const W=[];
+for(let m=0;m<6;m++){const n=365+m*14;for(let i=0;i<n;i++){
+  const si=pw(SYS.map((_,j)=>j),SYS.map(s=>Array.isArray(s.w)?s.w[m]:s.w)),s=SYS[si],as=A.filter(a=>a.s===si),a=pw(as,as.map(x=>x.w)),c=CON[s.c];
+  const rep=MS[m]+R()*ML[m]*24,pr=pw([1,2,3,4],[6,22,47,25]),S=SLA[pr],mu=Array.isArray(c.mu)?c.mu[m]:c.mu;
+  const hold=R()<.12?'Awaiting parts':R()<.07?'Awaiting access':'';
+  const fr=Math.exp(rn()*.6+mu-.15),f=Math.exp(rn()*.65+mu+(pr===1?.2:0))*(hold==='Awaiting parts'?1.5+R()*2.5:hold?1.2+R()*1.3:1);
+  let comp=rep+S.rect*f,resp=Math.min(rep+S.resp*fr,comp);if(comp>NOW)comp=null;if(resp>NOW)resp=null;
+  const hr=rep%24,shift=hr<6||hr>=22?'Night':hr<14?'Day':'Evening',k=shift==='Night'?2.2:1;
+  const w={id:'',type:'CM',m,rep,pr,a,s:si,c:s.c,z:a.z,resp,comp,hold,shift,fc:pw(s.f,s.f.map((_,j)=>s.f.length-j)),def:[],reopen:comp!=null&&R()<.04};
+  w.rDue=rep+S.rect<=NOW;w.rPass=comp!=null&&comp-rep<=S.rect+1e-9;w.pDue=rep+S.resp<=NOW;w.pPass=resp!=null&&resp-rep<=S.resp+1e-9;
+  w.claim=w.rPass||R()<c.claim;
+  if(R()<.03*k)w.def.push('No asset recorded');if(comp!=null&&R()<.06*k)w.def.push('No failure code');if(comp!=null&&R()<.05)w.def.push('No close-out note');
+  if(pr===1&&a.crit==='C')w.def.push('Priority mismatch');if(w.rDue&&!w.rPass&&w.claim)w.def.push('Clock paused, no reason');
+  w.st=comp!=null?(NOW-comp<72?'COMP':'CLOSE'):resp!=null?(hold==='Awaiting parts'?'WMATL':'INPRG'):(R()<.5?'WAPPR':'APPR');
+  W.push(w)}}
+W.sort((x,y)=>x.rep-y.rep);const last={};W.forEach((w,i)=>{w.id='WO-'+(204100+i);const rk=w.a.id+w.fc;w.repeat=last[rk]!=null&&w.rep-last[rk]<=720;last[rk]=w.rep;
+  w.why=w.rDue&&!w.rPass?(w.hold||(!w.pPass?'Late response':w.repeat?'Repeat fault':'No reason logged')):''});
+const P=[];let pi=0;for(let m=0;m<6;m++)A.forEach(a=>{if(R()<({A:1,B:.5,C:.34})[a.crit]){const c=CON[SYS[a.s].c],p=Array.isArray(c.ppm)?c.ppm[m]:c.ppm,due=MS[m]+(3+R()*(ML[m]-4))*24;
+  let comp=R()<p?due-R()*60:R()<.6?due+(8+R()*20)*24:null;const on=comp!=null&&comp<=due;if(comp>NOW)comp=null;
+  P.push({id:'PM-'+(88000+pi++),type:'PM',m,rep:due,a,s:a.s,c:SYS[a.s].c,z:a.z,comp,on,pr:'',def:[],st:comp!=null?'CLOSE':'APPR'})}});
+
+/* ---------- 2. KPI engine: every figure derived from timestamps, never from a contractor's own claim ---------- */
+const F={m:5,c:-1,z:-1},flt=l=>l.filter(w=>(F.c<0||w.c===F.c)&&(F.z<0||w.z===F.z));
+const pct=(a,b)=>b?100*a/b:null,f1=x=>x==null||isNaN(x)?'–':x.toFixed(1),avg=l=>l.length?l.reduce((s,x)=>s+x,0)/l.length:null;
+const cm=m=>flt(W).filter(w=>w.m===m),pm=m=>flt(P).filter(w=>w.m===m);
+const rect=l=>{const d=l.filter(w=>w.rDue),p=d.filter(w=>w.rPass);return{due:d,pass:p,fail:d.filter(w=>!w.rPass),v:pct(p.length,d.length),t:d.length?avg(d.map(w=>SLA[w.pr].t)):null}};
+const respK=l=>{const d=l.filter(w=>w.pDue),p=d.filter(w=>w.pPass);return{fail:d.filter(w=>!w.pPass),v:pct(p.length,d.length)}};
+const openAt=h=>flt(W).filter(w=>w.rep<=h&&(w.comp==null||w.comp>h));
+const ppmK=l=>({fail:l.filter(w=>!w.on),v:pct(l.filter(w=>w.on).length,l.length)});
+const group=(l,key)=>{const g=new Map();l.forEach(w=>{const k=key(w);g.has(k)||g.set(k,[]);g.get(k).push(w)});return g};
+
+/* ---------- 3. Rendering ---------- */
+let D=[];const d=(list,title)=>{D.push([title,list]);return' data-d="'+(D.length-1)+'" tabindex="0" role="button"'};
+const pill=(v,t)=>v==null?'–':'<span class="pill '+(v>=t?'good':v>=t-5?'warn':'crit')+'">'+f1(v)+'%</span>';
+const delta=(v,p,inv)=>{if(v==null||p==null)return'';const x=v-p,g=inv?x<=0:x>=0;return'<span class="'+(g?'up':'dn')+'">'+(x>=0?'+':'')+(Number.isInteger(x)?x:f1(x))+'</span> vs prior month'};
+const bars=(rows,title)=>{const mx=Math.max(1,...rows.map(r=>r[1].length));return rows.map(r=>'<div class="hb"><span>'+r[0]+'</span><div class="t"><div class="f" style="width:'+100*r[1].length/mx+'%"></div></div><span class="n"'+d(r[1],title+': '+r[0])+'>'+r[1].length+'</span></div>').join('')};
+const tbl=(h,rows)=>'<div class="scroll"><table><tr>'+h.map(x=>'<th'+(x[0]==='#'?' class="n">'+x.slice(1):'>'+x)+'</th>').join('')+'</tr>'+rows.map(r=>'<tr>'+r.join('')+'</tr>').join('')+'</table></div>';
+const td=x=>'<td>'+x+'</td>',tn=x=>'<td class="n">'+x+'</td>';
+
+function commentary(){const m=F.m,c=cm(m),k=rect(c),out=[];
+  const byC=CON.map((x,i)=>({x,i,k:rect(c.filter(w=>w.c===i))})).filter(o=>o.k.due.length).sort((a,b)=>(a.k.v-a.k.t)-(b.k.v-b.k.t));
+  if(byC.length&&byC[0].k.v<byC[0].k.t)out.push(['<b>'+byC[0].x.n+'</b> is '+f1(byC[0].k.t-byC[0].k.v)+' pts below its contractual target ('+f1(byC[0].k.v)+'% vs '+f1(byC[0].k.t)+'%), with '+byC[0].k.fail.length+' missed work orders.','Recovery plan at the weekly contractor review · Owner: contractor manager · Due: 7 days']);
+  const why=[...group(k.fail,w=>w.why)].sort((a,b)=>b[1].length-a[1].length)[0];
+  if(why)out.push(['The largest reason for missed rectification is <b>'+why[0].toLowerCase()+'</b> ('+why[1].length+' of '+k.fail.length+' misses).',why[0]==='Awaiting parts'?'Agree a critical-spares list for the top failing assets · Owner: asset manager · Due: 14 days':'Review with the duty managers and fix at source · Owner: helpdesk lead · Due: 14 days']);
+  const rp=[...group(c,w=>w.a.id)].sort((a,b)=>b[1].length-a[1].length)[0];
+  if(rp&&rp[1].length>2)out.push(['Asset <b>'+rp[0]+'</b> ('+SYS[rp[1][0].s].n+') failed '+rp[1].length+' times this month.','Root-cause analysis; decide repair or replace · Owner: '+CON[rp[1][0].c].n+' with FM engineer · Due: 21 days']);
+  const dq=c.filter(w=>w.def.length),ng=dq.filter(w=>w.shift==='Night');
+  if(dq.length)out.push([dq.length+' work orders carry a data defect; the night shift logs '+f1(pct(ng.length,dq.length))+'% of them.','Logging refresher and mandatory fields at close-out · Owner: helpdesk lead · Due: 14 days']);
+  const od=pm(m).filter(w=>!w.on&&w.a.crit==='A');
+  if(od.length)out.push([od.length+' planned maintenance tasks on criticality-A assets were missed or late.','Catch-up schedule agreed per contractor · Owner: FM engineer · Due: 10 days']);
+  return out}
+
+const V={
+overview(){const m=F.m,c=cm(m),pc=m?cm(m-1):null,k=rect(c),pk=pc&&rect(pc),r=respK(c),pr=pc&&respK(pc),pp=ppmK(pm(m)),ppp=m?ppmK(pm(m-1)):null,op=openAt(MS[m+1]),opp=openAt(MS[m]),rpt=c.filter(w=>w.repeat),dq=c.filter(w=>w.def.length);
+  const tile=(l,v,s,list,t)=>'<button class="tile"'+d(list,t)+'><span class="l">'+l+'</span><span class="v">'+v+'</span><span class="s">'+s+'</span></button>';
+  const pts=[0,1,2,3,4,5].map(i=>rect(cm(i))),X=i=>80+i*88,Y=v=>170-(v-70)/30*150;
+  const svg='<svg viewBox="0 0 560 200" width="100%" role="img" aria-label="Rectification SLA trend">'+[70,80,90,100].map(v=>'<line x1="44" x2="540" y1="'+Y(v)+'" y2="'+Y(v)+'" stroke="var(--line)"/><text x="38" y="'+(Y(v)+4)+'" text-anchor="end">'+v+'</text>').join('')+
+   '<polyline fill="none" stroke="var(--warn)" stroke-dasharray="5 4" stroke-width="1.5" points="'+pts.map((p,i)=>X(i)+','+Y(p.t||90)).join(' ')+'"/>'+
+   '<polyline fill="none" stroke="var(--accent)" stroke-width="2.5" points="'+pts.map((p,i)=>X(i)+','+Y(Math.max(70,p.v||70))).join(' ')+'"/>'+
+   pts.map((p,i)=>'<circle cx="'+X(i)+'" cy="'+Y(Math.max(70,p.v||70))+'" r="'+(i===m?5:3)+'" fill="var(--accent)"/><text x="'+X(i)+'" y="'+(Y(Math.max(70,p.v||70))-10)+'" text-anchor="middle">'+f1(p.v)+'</text><text x="'+X(i)+'" y="192" text-anchor="middle">'+MN[i].slice(0,3)+'</text>').join('')+'</svg>';
+  return'<div class="tiles">'+
+   tile('Rectification within SLA',f1(k.v)+'%','target '+f1(k.t)+'% · '+delta(k.v,pk&&pk.v),k.fail,'Rectification SLA misses')+
+   tile('Response within SLA',f1(r.v)+'%',delta(r.v,pr&&pr.v)||'&nbsp;',r.fail,'Response SLA misses')+
+   tile('Planned maintenance on time',f1(pp.v)+'%','target 95% · '+delta(pp.v,ppp&&ppp.v),pp.fail,'Planned maintenance missed or late')+
+   tile('Open backlog at period end',op.length,delta(op.length,opp.length,1),op,'Open work orders at period end')+
+   tile('Repeat faults',rpt.length,'same asset, same fault, 30 days',rpt,'Repeat faults')+
+   tile('Work orders with data defects',f1(pct(dq.length,c.length))+'%',dq.length+' of '+c.length+' reactive',dq,'Work orders with data defects')+'</div>'+
+  '<div class="cols"><div class="panel"><h2>Rectification SLA, six months</h2>'+svg+'<p class="note">Solid: achieved. Dashed: contractual target, weighted by the month\'s priority mix.</p></div>'+
+  '<div class="panel"><h2>What changed and what happens next</h2><ul class="act">'+commentary().map(x=>'<li>'+x[0]+'<small>'+x[1]+'</small></li>').join('')+'</ul><p class="note">Drafted from the data by rule; a manager edits and approves before it goes out.</p></div></div>'+
+  '<div class="panel"><h2>Service providers</h2>'+tbl(['Provider','#Reactive','#Rectification','#Target','#Response','#Planned on time','#Open','#Repeat'],CON.map((x,i)=>{const l=c.filter(w=>w.c===i);if(!l.length)return null;const kk=rect(l),rr=respK(l),q=ppmK(pm(m).filter(w=>w.c===i)),o=op.filter(w=>w.c===i);
+    return[td(x.n),tn(l.length),'<td class="n"'+d(kk.fail,x.n+': rectification misses')+'>'+pill(kk.v,kk.t)+'</td>',tn(f1(kk.t)+'%'),'<td class="n"'+d(rr.fail,x.n+': response misses')+'>'+f1(rr.v)+'%</td>','<td class="n"'+d(q.fail,x.n+': planned maintenance missed or late')+'>'+pill(q.v,95)+'</td>','<td class="n"'+d(o,x.n+': open')+'>'+o.length+'</td>',tn(l.filter(w=>w.repeat).length)]}).filter(Boolean))+'</div>'},
+
+sla(){const c=cm(F.m);
+  const mat=CON.map((x,i)=>{const l=c.filter(w=>w.c===i);if(!l.length)return null;return[td(x.n)].concat([1,2,3,4].map(p=>{const k=rect(l.filter(w=>w.pr===p));return'<td class="n"'+d(k.fail,x.n+' P'+p+' misses')+'>'+pill(k.v,SLA[p].t)+' <small>'+k.pass.length+'/'+k.due.length+'</small></td>'}))}).filter(Boolean);
+  const rec=CON.map((x,i)=>{const k=rect(c.filter(w=>w.c===i));if(!k.due.length)return null;const cl=pct(k.due.filter(w=>w.claim).length,k.due.length),dis=k.due.filter(w=>w.claim&&!w.rPass);
+    return[td(x.n),tn(f1(cl)+'%'),tn(f1(k.v)+'%'),tn('<span class="'+(cl-k.v>2?'dn':'')+'">'+f1(cl-k.v)+' pts</span>'),'<td class="n"'+d(dis,x.n+': claimed pass, timestamps say miss')+'>'+dis.length+'</td>']}).filter(Boolean);
+  return'<p class="lede">Compliance is re-derived from each work order\'s reported, responded and completed timestamps against the contract matrix. The provider\'s own monthly figure is then reconciled to it, work order by work order.</p>'+
+  '<div class="panel"><h2>Rectification compliance by provider and priority</h2>'+tbl(['Provider','#P1 · 4 h · 98%','#P2 · 8 h · 95%','#P3 · 24 h · 90%','#P4 · 5 d · 90%'],mat)+'</div>'+
+  '<div class="panel"><h2>Claimed versus derived</h2>'+tbl(['Provider','#Provider-claimed','#System-derived','#Gap','#Disputed work orders'],rec)+'<p class="note">Each disputed work order is a line item for the weekly review, settled before the monthly report is issued.</p></div>'},
+
+backlog(){const m=F.m,c=cm(m),s=MS[m],e=MS[m+1],o0=openAt(s),o1=openAt(e),nw=c,cl=flt(W).filter(w=>w.comp!=null&&w.comp>s&&w.comp<=e),k=rect(c);
+  const age=w=>(e-w.rep)/24,bk=[['0–2 days',o1.filter(w=>age(w)<=2)],['3–7 days',o1.filter(w=>age(w)>2&&age(w)<=7)],['8–30 days',o1.filter(w=>age(w)>7&&age(w)<=30)],['Over 30 days',o1.filter(w=>age(w)>30)]];
+  const why=[...group(k.fail,w=>w.why)].sort((a,b)=>b[1].length-a[1].length),ST={WAPPR:'Waiting approval',APPR:'Approved, not started',INPRG:'In progress',WMATL:'Waiting on material',COMP:'Completed',CLOSE:'Closed'};
+  const st=m===5?[...group(o1,w=>w.st)].map(x=>[x[0]+' · '+ST[x[0]],x[1]]):null;
+  return'<div class="panel"><h2>Backlog movement, '+MN[m]+'</h2><div class="flow"><div><b'+d(o0,'Opening backlog')+'>'+o0.length+'</b><span>Opening</span></div><div><b'+d(nw,'New work orders')+'>+'+nw.length+'</b><span>New</span></div><div><b'+d(cl,'Completed in period')+'>−'+cl.length+'</b><span>Completed</span></div><div><b'+d(o1,'Closing backlog')+'>'+o1.length+'</b><span>Closing</span></div><div><b'+d(cl.filter(w=>w.reopen),'Reopened after completion')+'>'+cl.filter(w=>w.reopen).length+'</b><span>Reopened after completion</span></div></div><p class="note">Opening + new − completed = closing: '+o0.length+' + '+nw.length+' − '+cl.length+' = '+(o0.length+nw.length-cl.length)+'.</p></div>'+
+  '<div class="cols"><div class="panel"><h2>Why rectification was missed</h2>'+bars(why,'Missed')+'<p class="note">Every miss is classified by rule from hold codes, response time and asset history. "No reason logged" is the helpdesk\'s list to chase.</p></div>'+
+  '<div class="panel"><h2>Age of closing backlog</h2>'+bars(bk,'Open')+(st?'<h2 style="margin-top:14px">Open by status</h2>'+bars(st,'Open'):'')+'</div></div>'},
+
+assets(){const m=F.m,c=cm(m),hrs=ML[m]*24;
+  const rows=SYS.map((s,i)=>{const l=c.filter(w=>w.s===i);if(!l.length)return null;const done=l.filter(w=>w.comp!=null),na=A.filter(a=>a.s===i&&(F.z<0||a.z===F.z)).length,down=l.filter(w=>w.pr<=2).reduce((t,w)=>t+((w.comp==null?NOW:w.comp)-w.rep),0);
+    return[td(s.n),tn(na),'<td class="n"'+d(l,s.n+': failures')+'>'+l.length+'</td>',tn(f1(avg(done.map(w=>w.comp-w.rep)))),tn(f1(na*hrs/l.length/24)),tn(l.filter(w=>w.repeat).length),tn(f1(100-100*down/(na*hrs))+'%')]}).filter(Boolean);
+  const top=[...group(c,w=>w.a.id)].sort((a,b)=>b[1].length-a[1].length).slice(0,10).map(x=>[td('<span'+d(x[1],x[0]+': work orders')+'>'+x[0]+'</span>'),td(SYS[x[1][0].s].n),td(x[1][0].a.crit),tn(x[1].length),tn(f1(avg(x[1].filter(w=>w.comp!=null).map(w=>w.comp-w.rep)))),td(x[1][0].fc)]);
+  const fc=[...group(c,w=>SYS[w.s].n+' · '+w.fc)].sort((a,b)=>b[1].length-a[1].length);let cum=0;
+  const par=fc.slice(0,10).map(x=>{cum+=x[1].length;return[td(x[0]),'<td class="n"'+d(x[1],x[0])+'>'+x[1].length+'</td>',tn(f1(pct(cum,c.length))+'%')]});
+  return'<div class="panel"><h2>Asset performance by system</h2>'+tbl(['System','#Assets','#Failures','#MTTR, h','#MTBF, days','#Repeat','#Availability'],rows)+'<p class="note">MTTR: mean hours from report to completion. MTBF: asset-days in the period per failure. Availability counts P1 and P2 downtime only.</p></div>'+
+  '<div class="cols"><div class="panel"><h2>Assets failing most</h2>'+tbl(['Asset','System','Crit.','#Failures','#MTTR, h','Latest fault'],top)+'</div><div class="panel"><h2>Pareto of fault types</h2>'+tbl(['Fault','#Count','#Cumulative'],par)+'<p class="note">The first rows are the candidates for a Lean Six Sigma root-cause project.</p></div></div>'},
+
+hygiene(){const c=cm(F.m),ty=['No asset recorded','No failure code','No close-out note','Priority mismatch','Clock paused, no reason'],sh=['Day','Evening','Night'];
+  const rows=ty.map(t=>[td(t)].concat(sh.map(s=>{const l=c.filter(w=>w.shift===s&&w.def.includes(t));return'<td class="n"'+d(l,t+' · '+s+' shift')+'>'+l.length+'</td>'})).concat([tn(c.filter(w=>w.def.includes(t)).length)]));
+  rows.push([td('<b>Work orders logged</b>')].concat(sh.map(s=>tn(c.filter(w=>w.shift===s).length))).concat([tn(c.length)]));
+  const pl=c.filter(w=>w.def.length).sort((a,b)=>b.rep-a.rep).slice(0,15).map(w=>[td(w.id),td(ft(w.rep)),td(w.shift),td(CON[w.c].n),td(w.def.join('; '))]);
+  return'<p class="lede">The helpdesk\'s daily punch list. Each defect is a field that makes a KPI wrong or unauditable, listed by the shift that logged it so it is fixed at source.</p>'+
+  '<div class="panel"><h2>Defects by type and shift</h2>'+tbl(['Defect','#Day 06–14','#Evening 14–22','#Night 22–06','#Total'],rows)+'</div><div class="panel"><h2>Latest to fix</h2>'+tbl(['Work order','Reported','Shift','Provider','Defect'],pl)+'</div>'},
+
+ppm(){const p=pm(F.m),row=(n,l)=>{const k=ppmK(l);return l.length?[td(n),tn(l.length),tn(l.filter(w=>w.on).length),'<td class="n"'+d(k.fail,n+': missed or late')+'>'+k.fail.length+'</td>',tn(pill(k.v,95))]:null};
+  const od=p.filter(w=>!w.on&&w.a.crit==='A').slice(0,15).map(w=>[td(w.id),td(w.a.id),td(SYS[w.s].n),td(CON[w.c].n),td(ft(w.rep)),td(w.comp!=null?'Done late, '+ft(w.comp):'<span class="pill crit">Not done</span>')]);
+  return'<div class="cols"><div class="panel"><h2>Planned maintenance by provider</h2>'+tbl(['Provider','#Due','#On time','#Missed / late','#Compliance'],CON.map((x,i)=>row(x.n,p.filter(w=>w.c===i))).filter(Boolean))+'</div><div class="panel"><h2>By system</h2>'+tbl(['System','#Due','#On time','#Missed / late','#Compliance'],SYS.map((x,i)=>row(x.n,p.filter(w=>w.s===i))).filter(Boolean))+'</div></div>'+
+  '<div class="panel"><h2>Criticality-A assets, missed or late</h2>'+tbl(['Task','Asset','System','Provider','Due','Outcome'],od)+'</div>'},
+
+report(){const m=F.m,c=cm(m),k=rect(c),r=respK(c),pp=ppmK(pm(m)),o=openAt(MS[m+1]),cmt=commentary(),scope=(F.c<0?'all service providers':CON[F.c].n)+', '+(F.z<0?'all zones':'zone '+ZONES[F.z]);
+  return'<div class="panel"><h2>Monthly executive summary, '+MN[m]+'</h2><div class="rep" id="rep"><p><b>Scope:</b> '+scope+'.</p><p><b>Headline.</b> '+c.length+' reactive work orders were raised. '+f1(k.v)+'% were rectified within SLA against a weighted target of '+f1(k.t)+'%, and '+f1(r.v)+'% were responded to within SLA. Planned maintenance was '+f1(pp.v)+'% on time against a 95% target. '+o.length+' work orders were open at period end.</p>'+cmt.map(x=>'<p>'+x[0]+' <i>Action: '+x[1]+'.</i></p>').join('')+'</div><p style="margin:12px 0 0"><button class="btn" id="cpr">Copy summary</button></p><p class="note">Draft generated from the same figures as every other tab. It is edited and approved by a manager before issue.</p></div>'+
+  '<div class="panel"><h2>Figures check on this refresh</h2>'+tbl(['Check','Result'],checks().map(x=>[td(x[0]),td('<span class="pill '+(x[1]?'good':'crit')+'">'+(x[1]?'Reconciled':'Mismatch')+'</span>')]))+'<p class="note">Headline figures are recomputed by an independent route on every refresh. A mismatch blocks the report.</p></div>'},
+
+dict(){return'<p class="lede">One definition per KPI, agreed once with the client and every service provider. The numbers on every tab follow these rules exactly.</p><div class="panel"><h2>SLA matrix used in this prototype</h2>'+tbl(['Priority','Meaning','#Respond within','#Rectify within','#Target'],[['P1','Safety or operations at risk','15 min','4 h','98%'],['P2','Service degraded','30 min','8 h','95%'],['P3','Routine fault','4 h','24 h','90%'],['P4','Minor or cosmetic','24 h','5 days','90%']].map(r=>[td(r[0]),td(r[1]),tn(r[2]),tn(r[3]),tn(r[4])]))+'<p class="note">Illustrative values. A real contract sets its own times, exclusions and clock-stop rules.</p></div>'+
+  '<div class="panel"><h2>KPI dictionary</h2>'+tbl(['KPI','Definition','Clock and exclusions'],[['Rectification within SLA','Work orders completed within the rectify time ÷ work orders whose rectify time has elapsed','Clock starts when the helpdesk logs the call. Open and overdue counts as a miss. Holds stop the clock only with a logged reason'],['Response within SLA','Work orders with first response within the respond time ÷ those whose respond time has elapsed','Same clock start'],['Planned maintenance on time','Tasks completed on or before the due date ÷ tasks due in the period','Late completion counts as a miss in the month it was due'],['Open backlog','Reactive work orders reported and not completed at period end','Opening + new − completed = closing'],['Repeat fault','A reactive work order on an asset that had the same fault within the previous 30 days','By asset ID, so work orders with no asset cannot be counted'],['MTTR','Mean hours from report to completion, completed work orders',''],['MTBF','Asset-days in the period ÷ failures',''],['Availability','1 − P1 and P2 downtime ÷ asset-hours in the period',''],['Data defect','A work order with a missing asset, failure code or close-out note, a priority that contradicts asset criticality, or a clock pause with no reason','']].map(r=>r.map(td)))+'</div>'}
+};
+function checks(){const m=F.m,c=cm(m),k=rect(c),o0=openAt(MS[m]),o1=openAt(MS[m+1]),cl=flt(W).filter(w=>w.comp!=null&&w.comp>MS[m]&&w.comp<=MS[m+1]),p=pm(m);
+  return[['Rectification passes: total equals sum across providers',k.pass.length===CON.reduce((s,_,i)=>s+rect(c.filter(w=>w.c===i)).pass.length,0)],
+  ['Rectification due: total equals sum across priorities',k.due.length===[1,2,3,4].reduce((s,x)=>s+rect(c.filter(w=>w.pr===x)).due.length,0)],
+  ['Backlog: opening + new − completed equals closing',o0.length+c.length-cl.length===o1.length],
+  ['Misses: every miss has exactly one reason',k.fail.every(w=>w.why)&&k.pass.every(w=>!w.why)],
+  ['Planned maintenance: total equals sum across systems',p.length===SYS.reduce((s,_,i)=>s+p.filter(w=>w.s===i).length,0)],
+  ['Work orders: total equals sum across shifts',c.length===['Day','Evening','Night'].reduce((s,x)=>s+c.filter(w=>w.shift===x).length,0)]]}
+
+/* ---------- 4. Shell: tabs, filters, drill-down, copy ---------- */
+const TABS=[['overview','Overview'],['sla','SLA & providers'],['backlog','Backlog & reasons'],['assets','Assets'],['hygiene','Helpdesk hygiene'],['ppm','Planned maintenance'],['report','Monthly report'],['dict','KPI dictionary']];
+let tab=TABS.some(t=>'#'+t[0]===location.hash)?location.hash.slice(1):'overview';const $=id=>document.getElementById(id);
+function render(){D=[];$('tabs').innerHTML=TABS.map(t=>'<button role="tab" id="t-'+t[0]+'" aria-selected="'+(t[0]===tab)+'" data-t="'+t[0]+'">'+t[1]+'</button>').join('');$('main').innerHTML=V[tab]();const ck=checks();$('chk').textContent='Figures check '+ck.filter(x=>x[1]).length+'/'+ck.length;}
+const opt=(id,arr,sel)=>{$(id).innerHTML=arr.map(x=>'<option value="'+x[0]+'"'+(x[0]===sel?' selected':'')+'>'+x[1]+'</option>').join('')};
+opt('fm',MN.map((n,i)=>[i,n]),5);opt('fc',[[-1,'All providers']].concat(CON.map((c,i)=>[i,c.n])),-1);opt('fz',[[-1,'All zones']].concat(ZONES.map((z,i)=>[i,z])),-1);
+[['fm','m'],['fc','c'],['fz','z']].forEach(x=>$(x[0]).addEventListener('change',e=>{F[x[1]]=+e.target.value;render()}));
+$('tabs').addEventListener('click',e=>{const t=e.target.dataset.t;if(t){tab=t;try{history.replaceState(null,'','#'+t)}catch(_){}render()}});
+const H=['Work order','Type','Reported / due','Priority','Asset','System','Zone','Provider','Shift','Status','Responded','Completed','Hours to rectify','SLA hours','Within SLA','Miss reason','Repeat','Data defects'];
+const rowOf=w=>[w.id,w.type,ft(w.rep),w.pr?'P'+w.pr:'',w.def.includes('No asset recorded')?'':w.a.id,SYS[w.s].n,ZONES[w.z],CON[w.c].n,w.shift||'',w.st,ft(w.resp),ft(w.comp),w.type==='CM'&&w.comp!=null?(w.comp-w.rep).toFixed(1):'',w.pr?SLA[w.pr].rect:'',w.type==='CM'?(w.rDue?(w.rPass?'Yes':'No'):'Not yet due'):(w.on?'Yes':'No'),w.why||'',w.repeat?'Yes':'',w.def.join('; ')];
+let cur=[];
+function open(i){const x=D[i];cur=x[1];$('dt').textContent=x[0]+' · '+cur.length+' record'+(cur.length===1?'':'s');
+  $('dbody').innerHTML=(cur.length>150?'<p class="note">Showing the first 150. Copy as CSV takes all '+cur.length+'.</p>':'')+'<table><tr>'+H.map(h=>'<th>'+h+'</th>').join('')+'</tr>'+cur.slice(0,150).map(w=>'<tr>'+rowOf(w).map(v=>'<td>'+v+'</td>').join('')+'</tr>').join('')+'</table>';
+  const g=$('dlg');g.showModal?g.showModal():g.setAttribute('open','')}
+document.addEventListener('click',e=>{const el=e.target.closest('[data-d]');if(el)open(+el.dataset.d);if(e.target.id==='cpr')copy($('rep').innerText,e.target,$('rep'))});
+document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches&&e.target.matches('td[data-d],b[data-d],span[data-d]')){e.preventDefault();open(+e.target.dataset.d)}});
+function copy(text,btn,host){const done=()=>{const o=btn.textContent;btn.textContent='Copied';setTimeout(()=>btn.textContent=o,1500)};
+  const fb=()=>{const t=document.createElement('textarea');t.value=text;t.id='fallback-copy';host.prepend(t);t.select();btn.textContent='Select all and copy'};
+  try{navigator.clipboard.writeText(text).then(done,fb)}catch(_){fb()}}
+$('cp').addEventListener('click',e=>copy([H].concat(cur.map(rowOf)).map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n'),e.target,$('dbody')));
+$('cl').addEventListener('click',()=>$('dlg').close());
+render();
+</script>
+</body></html>
